@@ -26,4 +26,4 @@ server
 .DS_Store
 *.log
 
-cloud/
+cloud/*

@@ -12,11 +12,11 @@ import (
 )
 
 func main() {
-	if err := OpenDBConnection(); err != nil {
+	if err := OpenEnv(); err != nil {
 		panic(err)
 	}
 
-	if err := OpenEnv(); err != nil {
+	if err := OpenDBConnection(); err != nil {
 		panic(err)
 	}
 
@@ -70,6 +70,7 @@ func main() {
 	}
 	SetTLSConfigs(srv.TLSConfig)
 
-	log.Printf("Server is starting on %s...\n", AppUrl())
+	log.Printf("Server is starting on port %s [%s] \n", os.Getenv("PORT"), srv.Addr)
+
 	log.Fatal(srv.ListenAndServe())
 }

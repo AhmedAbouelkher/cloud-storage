@@ -1,19 +1,19 @@
 package main
 
 import (
+	"os"
+
 	"github.com/kamva/mgm/v3"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const (
-	database = "storage"
-)
-
 func OpenDBConnection() error {
+	db := os.Getenv("DB_NAME")
+	uri := os.Getenv("MONGO_URL")
 	err := mgm.SetDefaultConfig(
 		nil,
-		database,
-		options.Client().ApplyURI("mongodb://127.0.0.1:27017"),
+		db,
+		options.Client().ApplyURI(uri),
 	)
 	if err != nil {
 		return err

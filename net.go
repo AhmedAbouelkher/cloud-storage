@@ -118,7 +118,6 @@ func JoinUrl(path string) string {
 }
 
 func GetAddr() string {
-	dm := os.Getenv("APP_URL")
 	prt := os.Getenv("PORT")
-	return dm + ":" + prt
+	return ":" + prt
 }
