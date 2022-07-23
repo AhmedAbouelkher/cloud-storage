@@ -1,0 +1,376 @@
+{
+	"info": {
+		"_postman_id": "b50566c9-8c11-4f3c-b8aa-b072047e7e5a",
+		"name": "storage",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12017926"
+	},
+	"item": [
+		{
+			"name": "stg",
+			"item": [
+				{
+					"name": "buckets",
+					"item": [
+						{
+							"name": "create bucket",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"payment\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/bucket",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"bucket"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "[internal] fetch objects",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/bucket/:name/objects",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"bucket",
+										":name",
+										"objects"
+									],
+									"variable": [
+										{
+											"key": "name",
+											"value": "payment"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delet bucket",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/bucket/:name",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"bucket",
+										":name"
+									],
+									"variable": [
+										{
+											"key": "name",
+											"value": "dummy_ds___herer-463"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "objects",
+					"item": [
+						{
+							"name": "upload file",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": "/Users/ahmedmahmoud/Downloads/694930733.m3u8"
+										},
+										{
+											"key": "bucket",
+											"value": "ahmed-691",
+											"type": "text"
+										},
+										{
+											"key": "key",
+											"value": "file.txt",
+											"type": "text",
+											"disabled": true
+										}
+									]
+								},
+								"url": {
+									"raw": "{{url}}/object",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"object"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "create sharable link",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Cache-Control",
+										"value": "no-cache",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{url}}/object/:uuid/external",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"object",
+										":uuid",
+										"external"
+									],
+									"query": [
+										{
+											"key": "ttl",
+											"value": "18000",
+											"description": "The duration added to the current time in seconds after which the shared link will be invalid",
+											"disabled": true
+										}
+									],
+									"variable": [
+										{
+											"key": "uuid",
+											"value": "3fb8a4dc-a765-4f72-8970-79bb93e48f41"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "[dependent] download object",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Cache-Control",
+										"value": "no-cache",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{url}}/share/:bucket/:uuid?session=62dc0d93c8e0070364592e64",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"share",
+										":bucket",
+										":uuid"
+									],
+									"query": [
+										{
+											"key": "session",
+											"value": "62dc0d93c8e0070364592e64"
+										}
+									],
+									"variable": [
+										{
+											"key": "bucket",
+											"value": "payment-858"
+										},
+										{
+											"key": "uuid",
+											"value": "d1a77ad3-95df-45d4-a262-11d0d6cfd4ff"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "[internal] fetch object",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": []
+										},
+										{
+											"key": "type",
+											"value": "image/jpeg",
+											"type": "text"
+										},
+										{
+											"key": "bucket",
+											"value": "",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{url}}/object/:uuid",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"object",
+										":uuid"
+									],
+									"variable": [
+										{
+											"key": "uuid",
+											"value": "6ba9c899-b275-4282-9011-d890facf5b96"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delete object by uuid",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": []
+										},
+										{
+											"key": "type",
+											"value": "image/jpeg",
+											"type": "text"
+										},
+										{
+											"key": "bucket",
+											"value": "",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{url}}/object/:uuid",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"object",
+										":uuid"
+									],
+									"variable": [
+										{
+											"key": "uuid",
+											"value": "8472ca25-5c9e-470f-946e-86c1ab19bc71"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ping",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{url}}/ping",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"ping"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "home",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{url}}/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						""
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "url",
+			"value": "",
+			"type": "string",
+			"disabled": true
+		},
+		{
+			"key": "url",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

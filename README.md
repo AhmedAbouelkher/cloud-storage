@@ -1,5 +1,7 @@
 # Storage Service
 
+You can view demo from here [cloud-storage](http://139.162.151.226:8080) using postman [collection](./postman/cloud-storage.postman_collection.json) to interact with the service
+
 ### Goals
 
 * Create storage buckets.
