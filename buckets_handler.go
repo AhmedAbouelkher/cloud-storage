@@ -17,6 +17,7 @@ func HandleBucketCreation(w http.ResponseWriter, r *http.Request) {
 		SendValidationError(w, err, http.StatusUnprocessableEntity)
 		return
 	}
+	defer r.Body.Close()
 
 	b := &Bucket{
 		Name: payload.Name,

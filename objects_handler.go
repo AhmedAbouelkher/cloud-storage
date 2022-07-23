@@ -27,6 +27,7 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	defer r.Body.Close()
 
 	k := r.FormValue("key")
 	if k == "" {
