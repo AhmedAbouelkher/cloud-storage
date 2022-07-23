@@ -1,0 +1,22 @@
+{
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    },
+    "cSpell.words": [
+        "afero",
+        "appfs",
+        "bson",
+        "didip",
+        "Expirable",
+        "godotenv",
+        "joho",
+        "kamva",
+        "middlewares",
+        "mpegurl",
+        "OUUID",
+        "Subrouter"
+    ]
+}
