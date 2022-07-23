@@ -46,11 +46,11 @@ func (m *LogMiddleware) Func() mux.MiddlewareFunc {
 			next.ServeHTTP(logRespWriter, r)
 
 			m.logger.Printf(
-				"url=%s duration=%s status=%d body=%s",
+				"url=%s duration=%s status=%d",
 				r.URL.String(),
 				time.Since(startTime).String(),
 				logRespWriter.statusCode,
-				logRespWriter.buf.String())
+			)
 		})
 	}
 }

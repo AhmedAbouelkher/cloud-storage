@@ -27,3 +27,4 @@ server
 *.log
 
 cloud/*
+server_configs.txt
