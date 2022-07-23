@@ -24,7 +24,11 @@ func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		SendJson(w, http.StatusOK, Payload{"message": "Welcome to the API!"})
+		SendJson(w, http.StatusOK, Payload{
+			"message":            "Welcome to Cloud Storage!",
+			"description":        "A simple object storage with golang",
+			"postman_collection": "https://github.com/AhmedAbouelkher/cloud-storage/blob/master/postman/cloud-storage.postman_collection.json",
+		})
 	}).Methods("GET")
 
 	r.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
