@@ -115,7 +115,7 @@ func AppUrl() string {
 
 func JoinUrl(path string) string {
 	p := os.Getenv("PORT")
-	return fmt.Sprintf("%s%s:%s", AppUrl(), path, p)
+	return fmt.Sprintf("%s:%s%s", AppUrl(), p, path)
 }
 
 func GetAddr() string {
