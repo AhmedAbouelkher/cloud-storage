@@ -94,9 +94,15 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 	uuid := mux.Vars(r)["uuid"]
 	// extract ttl from query param
 	uTTL := r.URL.Query().Get("ttl")
+	ttl, _ := strconv.ParseInt(uTTL, 10, 64)
 
 	if uuid == "" {
 		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("uuid is required"))
+		return
+	}
+
+	if ttl > (24 * 60 * 60) {
+		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("ttl is too long"))
 		return
 	}
 
@@ -106,7 +112,6 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ttl, _ := strconv.ParseInt(uTTL, 10, 64)
 	l, s, err := o.GenerateSharableLink(&ObjectShare{
 		TTL: time.Duration(ttl),
 	})
