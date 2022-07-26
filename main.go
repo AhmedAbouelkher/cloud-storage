@@ -46,6 +46,8 @@ func main() {
 	r.HandleFunc("/object/{uuid}", HandleObjectDeletion).Methods(http.MethodDelete)
 	r.HandleFunc("/object/{uuid}", HandleObjectFetch).Methods(http.MethodGet)
 
+	r.HandleFunc("/upload", HandleFileUpload).Methods(http.MethodPost)
+
 	// Object share
 	r.HandleFunc("/share/{bucket}/{uuid}", HandleServingRequestedObject).Methods(http.MethodGet)
 

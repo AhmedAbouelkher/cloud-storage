@@ -1,8 +1,7 @@
 package main
 
 import (
-	"bytes"
-	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,14 +16,14 @@ func CreateFile(p string, data []byte) (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0777); err != nil {
 		return nil, err
 	}
-	dst, err := os.Create(path)
+	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := io.Copy(dst, bytes.NewReader(data)); err != nil {
-		return nil, err
-	}
-	return dst, nil
+	return f, nil
 }
 
 func GetFile(p string) (*os.File, error) {

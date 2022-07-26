@@ -54,7 +54,7 @@ func CreateBucket(b *Bucket) error {
 
 func (b *Bucket) mutateName() error {
 	n := normalizeName(b.Name)
-	r, err := rand.Int(rand.Reader, big.NewInt(999))
+	r, err := rand.Int(rand.Reader, big.NewInt(9999))
 	if err != nil {
 		return err
 	}

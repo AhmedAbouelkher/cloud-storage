@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,12 +17,6 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b := r.FormValue("bucket")
-	if b == "" {
-		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("bucket name is required"))
-		return
-	}
-
 	f, h, err := r.FormFile("file")
 	if err != nil {
 		SendHttpJsonError(w, http.StatusBadRequest, err)
@@ -29,18 +25,30 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	defer r.Body.Close()
 
+	typ := h.Header.Get("Content-Type")
+	if r := CheckType(typ); !r {
+		SendHttpJsonError(w, http.StatusForbidden, errors.New("file type is not allowed"))
+		return
+	}
+
+	b := r.FormValue("bucket")
+	if b == "" {
+		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("bucket name is required"))
+		return
+	}
+
 	k := r.FormValue("key")
 	if k == "" {
 		k = h.Filename
 	}
 
 	cfg := &SaveConfig{
-		BucketID: r.FormValue("bucket"),
+		BucketID: b,
 		Reader:   f,
 		Key:      k,
 	}
 	o := &Object{
-		Type: h.Header.Get("Content-Type"),
+		Type: typ,
 	}
 
 	if _, err := o.Save(cfg); err != nil {
@@ -94,7 +102,7 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 	uuid := mux.Vars(r)["uuid"]
 	// extract ttl from query param
 	uTTL := r.URL.Query().Get("ttl")
-	ttl, _ := strconv.ParseInt(uTTL, 10, 64)
+	ttl, _ := strconv.ParseInt(uTTL, 10, 32)
 
 	if uuid == "" {
 		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("uuid is required"))
@@ -157,4 +165,51 @@ func HandleServingRequestedObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", f.Type)
 
 	http.ServeContent(w, r, f.Name(), time.Time{}, f.File)
+}
+
+func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
+	if IsProduction() {
+		SendHttpJsonError(w, http.StatusUnauthorized, errors.New("access is not allowed"))
+		return
+	}
+
+	if err := r.ParseMultipartForm(MaxUploadLimit); err != nil {
+		SendHttpJsonError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	f, h, err := r.FormFile("file")
+	if err != nil {
+		SendHttpJsonError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	defer f.Close()
+	defer r.Body.Close()
+
+	typ := h.Header.Get("Content-Type")
+	if r := CheckType(typ); !r {
+		SendHttpJsonError(w, http.StatusForbidden, errors.New("file type is not allowed"))
+		return
+	}
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, f); err != nil {
+		SendHttpJsonError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	c := buf.String()
+	if h.Size > 1024 {
+		c = c[:1024]
+	}
+
+	SendJson(w, http.StatusOK, Payload{
+		"message": "object uploaded",
+		"name": Payload{
+			"original":  h.Filename,
+			"extension": h.Header.Get("Content-Type"),
+			"size":      h.Size,
+		},
+		"content": c,
+	})
 }

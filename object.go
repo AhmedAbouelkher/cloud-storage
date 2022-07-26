@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -247,4 +249,24 @@ func checkSession(uuid string, sn string) error {
 		return ErrSessionExpired
 	}
 	return nil
+}
+
+var (
+	AllowedObjectTypes = []string{
+		"^image/*",
+		"^video/*",
+		"^audio/*",
+		"^application/pdf",
+		"^application/vnd.apple.mpegurl",
+		"^application/dash+xml",
+	}
+)
+
+func CheckType(t string) bool {
+	rgx := regexp.MustCompile(constructRegex())
+	return rgx.MatchString(t)
+}
+
+func constructRegex() string {
+	return strings.Join(AllowedObjectTypes, "|")
 }
