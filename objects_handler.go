@@ -15,8 +15,8 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(MaxUploadLimit); err != nil {
 		SendHttpJsonError(w, http.StatusBadRequest, err)
 		return
-	}
 
+	}
 	f, h, err := r.FormFile("file")
 	if err != nil {
 		SendHttpJsonError(w, http.StatusBadRequest, err)
