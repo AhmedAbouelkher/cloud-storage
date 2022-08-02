@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,7 @@ type Object struct {
 	Size       int    `json:"size"`
 	Directory  string `json:"directory"`
 	BucketName string `json:"bucket_name"`
+	Extension  string `json:"extension"`
 }
 
 func (o *Object) CreateIndex() error {
@@ -58,24 +60,29 @@ func (o *Object) Create(cfg *SaveConfig, bkt string) (*Object, error) {
 }
 
 func createObject(o *Object, cfg *SaveConfig, bkt string) (*Object, error) {
+	o.BucketName = bkt
+
 	// Create uuid
 	uuid, _ := uuid.NewRandom()
 	o.UUID = uuid.String()
 
-	// parse path to handle sub directories in bucket
-	k := cfg.Key
+	k := cfg.Key // aka: file name
 	if k == "" {
-		k = o.Title
+		o.Title = uuid.String() + filepath.Ext(k)
+	} else {
+		o.Title = filepath.Base(k)
 	}
-
-	t := uuid.String() + filepath.Ext(k)
-	o.Title = t
+	o.Extension = strings.TrimPrefix(filepath.Ext(k), ".")
 
 	dir := filepath.Dir(cfg.Key)
-	p := filepath.Join(bkt, dir, t) // bucket/new/image.jpg
+	o.Directory = dir
+
+	p := filepath.Join(bkt, dir, o.Title) // bucket/new/image.jpg
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(cfg.Reader)
+	if _, err := buf.ReadFrom(cfg.Reader); err != nil {
+		return nil, err
+	}
 
 	f, err := CreateFile(p, buf.Bytes())
 	if err != nil {
@@ -85,12 +92,6 @@ func createObject(o *Object, cfg *SaveConfig, bkt string) (*Object, error) {
 
 	// Update object
 	o.Size = buf.Len()
-	o.BucketName = bkt
-
-	// if dir != "." {
-	// 	dir = filepath.Join(bkt, dir)
-	// }
-	o.Directory = dir
 
 	return o, nil
 }
@@ -117,7 +118,10 @@ func SaveObject(o *Object, cfg *SaveConfig) (string, error) {
 // Fetch object by uuid
 func FetchObject(uuid string) (*Object, error) {
 	o := &Object{}
-	if err := mgm.Coll(o).FindOne(context.Background(), bson.M{"uuid": uuid}).Decode(o); err != nil {
+	if err := mgm.Coll(o).FindOne(
+		context.Background(),
+		bson.M{"uuid": uuid},
+	).Decode(o); err != nil {
 		return nil, err
 	}
 	return o, nil
@@ -182,9 +186,10 @@ func (o *Object) GenerateSharableLink(shr *ObjectShare) (string, *ObjectSharingS
 	}
 
 	l := fmt.Sprintf(
-		"/share/%s/%s?ttl=%d&session=%s",
+		"/share/%s/%s.%s?ttl=%d&session=%s",
 		bkt.Name,
-		o.Title,
+		o.UUID,
+		o.Extension,
 		ttl,
 		session.ID.Hex(),
 	)
@@ -268,7 +273,7 @@ type SaveMultipleConfig struct {
 	Configs  []*SaveConfig
 }
 
-func (s *SaveMultipleConfig) Save() ([]string, error) {
+func (s *SaveMultipleConfig) Save() ([]*Object, error) {
 	return SaveMultipleObjects(context.Background(), s)
 }
 
@@ -277,14 +282,14 @@ func (s *SaveMultipleConfig) Push(o *Object, cfg *SaveConfig) {
 	s.Configs = append(s.Configs, cfg)
 }
 
-func SaveMultipleObjects(ctx context.Context, scfg *SaveMultipleConfig) ([]string, error) {
+func SaveMultipleObjects(ctx context.Context, scfg *SaveMultipleConfig) ([]*Object, error) {
 	bkt, err := FetchBucket(scfg.BucketID)
 	if err != nil {
 		return nil, err
 	}
 
 	var objs []interface{}
-	var uuids []string
+	var uuids []*Object
 
 	for i, o := range scfg.Objects {
 		cfg := scfg.Configs[i]
@@ -293,7 +298,7 @@ func SaveMultipleObjects(ctx context.Context, scfg *SaveMultipleConfig) ([]strin
 			return nil, err
 		}
 		objs = append(objs, *obj)
-		uuids = append(uuids, obj.UUID)
+		uuids = append(uuids, obj)
 	}
 
 	// Store objects
@@ -302,4 +307,22 @@ func SaveMultipleObjects(ctx context.Context, scfg *SaveMultipleConfig) ([]strin
 	}
 
 	return uuids, nil
+}
+
+type UploadedObjectsResponse struct {
+	Message string              `json:"message"`
+	Objects []map[string]string `json:"objects"`
+	Bucket  string              `json:"bucket"`
+	Subpath string              `json:"sub_path"`
+}
+
+func (u *UploadedObjectsResponse) FromObjects(objs []*Object) {
+	u.Message = "objects created"
+	for _, o := range objs {
+		u.Objects = append(u.Objects, map[string]string{
+			"uuid":  o.UUID,
+			"title": o.Title,
+			"type":  o.Extension,
+		})
+	}
 }

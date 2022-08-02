@@ -49,7 +49,7 @@ func SendValidationError(w http.ResponseWriter, err error, status int) error {
 	return SendHttpJsonError(w, s, err)
 }
 
-func SendJson(w http.ResponseWriter, status int, p Payload) error {
+func SendJson(w http.ResponseWriter, status int, p any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(p)

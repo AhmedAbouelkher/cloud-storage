@@ -60,69 +60,6 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(MaxUploadLimit); err != nil {
-		SendHttpJsonError(w, http.StatusBadRequest, err)
-		return
-
-	}
-
-	form := r.MultipartForm
-	files := form.File["files"]
-	if len(files) == 0 {
-		SendHttpJsonError(w, http.StatusBadRequest, errors.New("no files provided"))
-		return
-	}
-
-	b := r.FormValue("bucket")
-	if b == "" {
-		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("bucket name is required"))
-		return
-	}
-
-	subP := r.FormValue("subpath")
-	subP = path.Clean(subP)
-	if !path.IsAbs(subP) {
-		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("subpath must be absolute"))
-		return
-	}
-
-	scfg := SaveMultipleConfig{
-		BucketID: b,
-	}
-
-	for _, fh := range files {
-		f, err := fh.Open()
-		if err != nil {
-			SendHttpJsonError(w, http.StatusInternalServerError, err)
-			return
-		}
-		defer f.Close()
-
-		key := filepath.Join(subP, fh.Filename)
-
-		cfg := &SaveConfig{
-			Reader: f,
-			Key:    key,
-		}
-		o := &Object{
-			Type: fh.Header.Get("Content-Type"),
-		}
-		scfg.Push(o, cfg)
-	}
-
-	uuids, err := scfg.Save()
-	if err != nil {
-		SendHttpJsonError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	SendJson(w, http.StatusOK, Payload{
-		"message": "objects created",
-		"uuids":   uuids,
-	})
-}
-
 func HandleObjectFetch(w http.ResponseWriter, r *http.Request) {
 	if IsProduction() {
 		SendHttpJsonError(w, http.StatusUnauthorized, errors.New("access is not allowed"))
@@ -267,4 +204,72 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		},
 		"content": c,
 	})
+}
+
+func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(MaxUploadLimit); err != nil {
+		SendHttpJsonError(w, http.StatusBadRequest, err)
+		return
+
+	}
+
+	form := r.MultipartForm
+	files := form.File["files"]
+	if len(files) == 0 {
+		SendHttpJsonError(w, http.StatusBadRequest, errors.New("no files provided"))
+		return
+	}
+
+	b := r.FormValue("bucket")
+	if b == "" {
+		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("bucket name is required"))
+		return
+	}
+
+	subP := r.FormValue("subpath")
+	if subP != "" {
+		subP = path.Clean(subP)
+		if !path.IsAbs(subP) {
+			SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("subpath must be absolute"))
+			return
+		}
+	}
+
+	scfg := SaveMultipleConfig{
+		BucketID: b,
+	}
+
+	for _, fh := range files {
+		f, err := fh.Open()
+		if err != nil {
+			SendHttpJsonError(w, http.StatusInternalServerError, err)
+			return
+		}
+		defer f.Close()
+
+		key := filepath.Join(subP, fh.Filename)
+
+		cfg := &SaveConfig{
+			Reader: f,
+			Key:    key,
+		}
+		o := &Object{
+			Type: fh.Header.Get("Content-Type"),
+		}
+		scfg.Push(o, cfg)
+	}
+
+	objs, err := scfg.Save()
+	if err != nil {
+		SendHttpJsonError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	resp := UploadedObjectsResponse{
+		Bucket:  b,
+		Subpath: subP,
+	}
+	resp.FromObjects(objs)
+
+	SendJson(w, http.StatusOK, resp)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/kamva/mgm/v3"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -21,6 +22,21 @@ const (
 type Bucket struct {
 	mgm.DefaultModel `bson:",inline"`
 	Name             string `json:"name"`
+}
+
+func (o *Bucket) CreateIndex() error {
+	col := mgm.Coll(o)
+	_, err := col.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: bson.M{"name": 1},
+		Options: options.MergeIndexOptions(
+			options.Index().SetUnique(true),
+			options.Index().SetName("name"),
+		),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Create bucket

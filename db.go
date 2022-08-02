@@ -31,5 +31,8 @@ func processIndexes() error {
 	if err := (&ObjectSharingSession{}).CreateIndex(); err != nil {
 		return err
 	}
+	if err := (&Bucket{}).CreateIndex(); err != nil {
+		return err
+	}
 	return nil
 }
