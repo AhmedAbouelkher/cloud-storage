@@ -26,10 +26,6 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	typ := h.Header.Get("Content-Type")
-	if r := CheckType(typ); !r {
-		SendHttpJsonError(w, http.StatusForbidden, errors.New("file type is not allowed"))
-		return
-	}
 
 	b := r.FormValue("bucket")
 	if b == "" {
@@ -185,12 +181,6 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 	defer r.Body.Close()
-
-	typ := h.Header.Get("Content-Type")
-	if r := CheckType(typ); !r {
-		SendHttpJsonError(w, http.StatusForbidden, errors.New("file type is not allowed"))
-		return
-	}
 
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, f); err != nil {

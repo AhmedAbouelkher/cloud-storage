@@ -61,7 +61,7 @@ func main() {
 	r.Use(NewLogMiddleware(logger).Func())
 
 	router := func() http.Handler {
-		rps := 1.0
+		rps := 5.0
 		l := tollbooth.NewLimiter(rps, &limiter.ExpirableOptions{DefaultExpirationTTL: time.Hour})
 		return tollbooth.LimitHandler(l, r)
 	}()

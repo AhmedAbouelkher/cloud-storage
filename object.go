@@ -8,8 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -261,12 +259,3 @@ var (
 		"^application/dash+xml",
 	}
 )
-
-func CheckType(t string) bool {
-	rgx := regexp.MustCompile(constructRegex())
-	return rgx.MatchString(t)
-}
-
-func constructRegex() string {
-	return strings.Join(AllowedObjectTypes, "|")
-}
