@@ -42,6 +42,7 @@ func main() {
 
 	// Objects
 	r.HandleFunc("/object", HandleObjectCreation).Methods(http.MethodPost)
+	r.HandleFunc("/objects", HandleObjectsCreation).Methods(http.MethodPost)
 	r.HandleFunc("/object/{uuid}/external", HandleGeneratingSharableLink).Methods(http.MethodPost)
 	r.HandleFunc("/object/{uuid}", HandleObjectDeletion).Methods(http.MethodDelete)
 	r.HandleFunc("/object/{uuid}", HandleObjectFetch).Methods(http.MethodGet)

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -25,7 +27,7 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	defer r.Body.Close()
 
-	typ := h.Header.Get("Content-Type")
+	ftyp := h.Header.Get("Content-Type")
 
 	b := r.FormValue("bucket")
 	if b == "" {
@@ -44,7 +46,7 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 		Key:      k,
 	}
 	o := &Object{
-		Type: typ,
+		Type: ftyp,
 	}
 
 	if _, err := o.Save(cfg); err != nil {
@@ -55,6 +57,69 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	SendJson(w, http.StatusOK, Payload{
 		"message": "object created",
 		"uuid":    o.UUID,
+	})
+}
+
+func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(MaxUploadLimit); err != nil {
+		SendHttpJsonError(w, http.StatusBadRequest, err)
+		return
+
+	}
+
+	form := r.MultipartForm
+	files := form.File["files"]
+	if len(files) == 0 {
+		SendHttpJsonError(w, http.StatusBadRequest, errors.New("no files provided"))
+		return
+	}
+
+	b := r.FormValue("bucket")
+	if b == "" {
+		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("bucket name is required"))
+		return
+	}
+
+	subP := r.FormValue("subpath")
+	subP = path.Clean(subP)
+	if !path.IsAbs(subP) {
+		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("subpath must be absolute"))
+		return
+	}
+
+	scfg := SaveMultipleConfig{
+		BucketID: b,
+	}
+
+	for _, fh := range files {
+		f, err := fh.Open()
+		if err != nil {
+			SendHttpJsonError(w, http.StatusInternalServerError, err)
+			return
+		}
+		defer f.Close()
+
+		key := filepath.Join(subP, fh.Filename)
+
+		cfg := &SaveConfig{
+			Reader: f,
+			Key:    key,
+		}
+		o := &Object{
+			Type: fh.Header.Get("Content-Type"),
+		}
+		scfg.Push(o, cfg)
+	}
+
+	uuids, err := scfg.Save()
+	if err != nil {
+		SendHttpJsonError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	SendJson(w, http.StatusOK, Payload{
+		"message": "objects created",
+		"uuids":   uuids,
 	})
 }
 

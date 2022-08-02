@@ -53,13 +53,11 @@ func (o *Object) Save(cfg *SaveConfig) (string, error) {
 	return SaveObject(o, cfg)
 }
 
-func SaveObject(o *Object, cfg *SaveConfig) (string, error) {
-	// Validate bucket existence
-	bkt, err := FetchBucket(cfg.BucketID)
-	if err != nil {
-		return "", err
-	}
+func (o *Object) Create(cfg *SaveConfig, bkt string) (*Object, error) {
+	return createObject(o, cfg, bkt)
+}
 
+func createObject(o *Object, cfg *SaveConfig, bkt string) (*Object, error) {
 	// Create uuid
 	uuid, _ := uuid.NewRandom()
 	o.UUID = uuid.String()
@@ -74,31 +72,46 @@ func SaveObject(o *Object, cfg *SaveConfig) (string, error) {
 	o.Title = t
 
 	dir := filepath.Dir(cfg.Key)
-	p := filepath.Join(bkt.Name, dir, t) // bucket/new/image.jpg
+	p := filepath.Join(bkt, dir, t) // bucket/new/image.jpg
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(cfg.Reader)
 
 	f, err := CreateFile(p, buf.Bytes())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer f.Close()
 
 	// Update object
-	o.Size = int(buf.Len())
-	o.BucketName = bkt.Name
+	o.Size = buf.Len()
+	o.BucketName = bkt
 
-	if dir != "." {
-		dir = filepath.Join(bkt.Name, dir)
-	}
+	// if dir != "." {
+	// 	dir = filepath.Join(bkt, dir)
+	// }
 	o.Directory = dir
+
+	return o, nil
+}
+
+func SaveObject(o *Object, cfg *SaveConfig) (string, error) {
+	// Validate bucket existence
+	bkt, err := FetchBucket(cfg.BucketID)
+	if err != nil {
+		return "", err
+	}
+
+	obj, err := o.Create(cfg, bkt.Name)
+	if err != nil {
+		return "", err
+	}
 
 	// Store object
 	if err := mgm.Coll(o).Create(o); err != nil {
 		return "", err
 	}
-	return uuid.String(), nil
+	return obj.UUID, nil
 }
 
 // Fetch object by uuid
@@ -249,13 +262,44 @@ func checkSession(uuid string, sn string) error {
 	return nil
 }
 
-var (
-	AllowedObjectTypes = []string{
-		"^image/*",
-		"^video/*",
-		"^audio/*",
-		"^application/pdf",
-		"^application/vnd.apple.mpegurl",
-		"^application/dash+xml",
+type SaveMultipleConfig struct {
+	BucketID string
+	Objects  []*Object
+	Configs  []*SaveConfig
+}
+
+func (s *SaveMultipleConfig) Save() ([]string, error) {
+	return SaveMultipleObjects(context.Background(), s)
+}
+
+func (s *SaveMultipleConfig) Push(o *Object, cfg *SaveConfig) {
+	s.Objects = append(s.Objects, o)
+	s.Configs = append(s.Configs, cfg)
+}
+
+func SaveMultipleObjects(ctx context.Context, scfg *SaveMultipleConfig) ([]string, error) {
+	bkt, err := FetchBucket(scfg.BucketID)
+	if err != nil {
+		return nil, err
 	}
-)
+
+	var objs []interface{}
+	var uuids []string
+
+	for i, o := range scfg.Objects {
+		cfg := scfg.Configs[i]
+		obj, err := o.Create(cfg, bkt.Name)
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, *obj)
+		uuids = append(uuids, obj.UUID)
+	}
+
+	// Store objects
+	if _, err := mgm.Coll(&Object{}).InsertMany(ctx, objs, nil); err != nil {
+		return nil, err
+	}
+
+	return uuids, nil
+}

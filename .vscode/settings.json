@@ -11,12 +11,15 @@
         "bson",
         "didip",
         "Expirable",
+        "ftyp",
         "godotenv",
         "joho",
         "kamva",
         "middlewares",
         "mpegurl",
+        "objs",
         "OUUID",
+        "scfg",
         "Subrouter"
     ]
 }
