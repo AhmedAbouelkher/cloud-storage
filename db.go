@@ -19,19 +19,24 @@ func OpenDBConnection() error {
 		return err
 	}
 
-	processIndexes()
+	if err := processIndexes(); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func processIndexes() error {
-	if err := (&Object{}).CreateIndex(); err != nil {
+	if err := (&Object{}).CreateIndexes(); err != nil {
 		return err
 	}
 	if err := (&ObjectSharingSession{}).CreateIndex(); err != nil {
 		return err
 	}
 	if err := (&Bucket{}).CreateIndex(); err != nil {
+		return err
+	}
+	if err := (&Resource{}).CreateIndexes(); err != nil {
 		return err
 	}
 	return nil

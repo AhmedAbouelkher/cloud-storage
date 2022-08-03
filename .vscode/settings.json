@@ -11,6 +11,7 @@
         "bson",
         "didip",
         "Expirable",
+        "fltr",
         "ftyp",
         "godotenv",
         "joho",
@@ -19,7 +20,9 @@
         "mpegurl",
         "objs",
         "OUUID",
+        "rsrc",
         "scfg",
+        "struct",
         "Subrouter"
     ]
 }

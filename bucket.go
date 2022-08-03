@@ -2,15 +2,13 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
-	"fmt"
-	"math/big"
 	"regexp"
 	"strings"
 
 	"github.com/kamva/mgm/v3"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -21,7 +19,8 @@ const (
 
 type Bucket struct {
 	mgm.DefaultModel `bson:",inline"`
-	Name             string `json:"name"`
+	Name             string                 `json:"name"`
+	Metadata         map[string]interface{} `json:"metadata"`
 }
 
 func (o *Bucket) CreateIndex() error {
@@ -70,11 +69,7 @@ func CreateBucket(b *Bucket) error {
 
 func (b *Bucket) mutateName() error {
 	n := normalizeName(b.Name)
-	r, err := rand.Int(rand.Reader, big.NewInt(9999))
-	if err != nil {
-		return err
-	}
-	b.Name = fmt.Sprintf("%s-%d", n, r)
+	b.Name = n
 	return nil
 }
 
@@ -124,6 +119,21 @@ func FetchBucket(name string) (*Bucket, error) {
 	return &b, nil
 }
 
+func FetchBucketByID(ID primitive.ObjectID) (*Bucket, error) {
+	var b Bucket
+	err := mgm.Coll(&Bucket{}).FindByID(ID, &b)
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &b, nil
+}
+
 func BucketExists(name string) (bool, error) {
 	var b Bucket
 	err := mgm.Coll(&Bucket{}).First(
@@ -131,6 +141,10 @@ func BucketExists(name string) (bool, error) {
 		&b,
 		options.FindOne().SetProjection(bson.M{"name": 1}),
 	)
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
 
 	if err != nil {
 		return false, err

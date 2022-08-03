@@ -2,12 +2,15 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -113,12 +116,57 @@ func AppUrl() string {
 	return fmt.Sprintf("%s%s", p, dm)
 }
 
-func JoinUrl(path string) string {
+func JoinUrl(path string) (string, error) {
 	p := os.Getenv("PORT")
-	return fmt.Sprintf("%s:%s%s", AppUrl(), p, path)
+	uri := fmt.Sprintf("%s:%s%s", AppUrl(), p, path)
+	url, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	return url.String(), nil
 }
 
 func GetAddr() string {
 	prt := os.Getenv("PORT")
 	return ":" + prt
+}
+
+type S3Path struct {
+	Bucket  string
+	Paths   []string
+	RawPath string
+}
+
+func (p *S3Path) String() string {
+	return BuildS3Path(p)
+}
+
+func BuildS3Path(s3 *S3Path) string {
+	pth := strings.TrimPrefix(s3.RawPath, s3.Bucket)
+	if pth == "" {
+		pth = strings.Join(s3.Paths, string(os.PathSeparator))
+	}
+	pth = strings.TrimPrefix(pth, "/")
+	return fmt.Sprintf("s3://%s/%s", s3.Bucket, pth)
+}
+
+func ParseS3Path(p string) (*S3Path, error) {
+	if !strings.HasPrefix(p, "s3://") {
+		return nil, fmt.Errorf("invalid s3 path: %s", p)
+	}
+	p = strings.TrimPrefix(p, "s3://")
+	p = strings.TrimSuffix(p, "/")
+	pth := strings.Split(p, "/")
+	return &S3Path{
+		Bucket: pth[0],
+		Paths:  pth[1:],
+	}, nil
+}
+
+func Base64Encode(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func Base64Decode(s string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(s)
 }

@@ -50,7 +50,14 @@ func main() {
 	r.HandleFunc("/upload", HandleFileUpload).Methods(http.MethodPost)
 
 	// Object share
-	r.HandleFunc("/share/{bucket}/{uuid}", HandleServingRequestedObject).Methods(http.MethodGet)
+	// r.HandleFunc("/share/{bucket}/{uuid}", HandleServingRequestedObject).Methods(http.MethodGet)
+	r.PathPrefix("/share").HandlerFunc(HandleServingRequestedObject).Methods(http.MethodGet)
+
+	// Resources
+	r.HandleFunc("/resource/s3", HandleResourceFetchWithS3).Methods(http.MethodGet)
+	r.HandleFunc("/resource/s3/objects", HandleResourceFilesFetchWithS3).Methods(http.MethodGet)
+	r.HandleFunc("/resource", HandleResourceCreation).Methods(http.MethodPost)
+	r.HandleFunc("/resource", HandleResourceDeletion).Methods(http.MethodDelete)
 
 	// middlewares
 	r.Use(func(n http.Handler) http.Handler {

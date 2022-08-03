@@ -28,3 +28,4 @@ server
 
 cloud/*
 server_configs.txt
+__debug_bin

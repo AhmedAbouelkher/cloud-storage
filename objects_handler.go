@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -27,27 +28,25 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	defer r.Body.Close()
 
-	ftyp := h.Header.Get("Content-Type")
-
 	b := r.FormValue("bucket")
 	if b == "" {
 		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("bucket name is required"))
 		return
 	}
 
-	k := r.FormValue("key")
-	if k == "" {
-		k = h.Filename
+	fPath := r.FormValue("key")
+	if fPath == "" {
+		fPath = h.Filename
 	}
 
 	cfg := &SaveConfig{
-		BucketID: b,
+		Bucket:   b,
 		Reader:   f,
-		Key:      k,
+		FilePath: fPath,
+		Mime:     h.Header.Get("Content-Type"),
+		Ext:      strings.TrimPrefix(filepath.Ext(fPath), "."),
 	}
-	o := &Object{
-		Type: ftyp,
-	}
+	o := &Object{}
 
 	if _, err := o.Save(cfg); err != nil {
 		SendHttpJsonError(w, http.StatusInternalServerError, err)
@@ -56,7 +55,7 @@ func HandleObjectCreation(w http.ResponseWriter, r *http.Request) {
 
 	SendJson(w, http.StatusOK, Payload{
 		"message": "object created",
-		"uuid":    o.UUID,
+		"object":  o,
 	})
 }
 
@@ -72,13 +71,20 @@ func HandleObjectFetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := FetchObject(uuid)
+	o, err := FindObject(uuid)
 	if err != nil {
 		SendHttpJsonError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	SendJson(w, http.StatusOK, Payload{"object": o})
+	k, _ := o.Key()
+	s3, _ := o.S3()
+
+	SendJson(w, http.StatusOK, Payload{
+		"object": o,
+		"key":    k,
+		"s3_uri": s3,
+	})
 }
 
 func HandleObjectDeletion(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +118,7 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := FetchObject(uuid)
+	o, err := FindObject(uuid)
 	if err != nil {
 		SendHttpJsonError(w, http.StatusInternalServerError, err)
 		return
@@ -128,7 +134,7 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 
 	SendJson(w, http.StatusOK, Payload{
 		"url":        l,
-		"uuid":       s.OUUID,
+		"uuid":       s.EntityTag,
 		"ttl":        s.TTL,
 		"session_id": s.ID,
 		"expire_at":  s.ExpiryDate.Format(time.RFC3339),
@@ -136,33 +142,38 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleServingRequestedObject(w http.ResponseWriter, r *http.Request) {
-	uuid := mux.Vars(r)["uuid"]
-	session := r.URL.Query().Get("session")
+	// uuid := mux.Vars(r)["uuid"]
+	// session := r.URL.Query().Get("session")
 
-	if uuid == "" || session == "" {
-		SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("uuid and session are required"))
-		return
-	}
+	// if uuid == "" || session == "" {
+	// 	SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("uuid and session are required"))
+	// 	return
+	// }
 
-	uuid = NameWithoutExt(uuid) //remove extension from uuid
-	f, err := ServeObject(uuid, session)
-	if err != nil {
-		if errors.Is(err, ErrSessionExpired) {
-			SendHttpJsonError(w, http.StatusForbidden, err)
-			return
-		} else if errors.Is(err, ErrSessionNotFound) {
-			SendHttpJsonError(w, http.StatusUnauthorized, err)
-			return
-		}
-		SendHttpJsonError(w, http.StatusInternalServerError, err)
-		return
-	}
+	// uuid = NameWithoutExt(uuid) //remove extension from uuid
+	// f, err := ServeObject(uuid, session)
+	// if err != nil {
+	// 	if errors.Is(err, ErrSessionExpired) {
+	// 		SendHttpJsonError(w, http.StatusForbidden, err)
+	// 		return
+	// 	} else if errors.Is(err, ErrSessionNotFound) {
+	// 		SendHttpJsonError(w, http.StatusUnauthorized, err)
+	// 		return
+	// 	}
+	// 	SendHttpJsonError(w, http.StatusInternalServerError, err)
+	// 	return
+	// }
 
-	defer f.Close()
+	// defer f.Close()
 
-	w.Header().Set("Content-Type", f.Type)
+	// w.Header().Set("Content-Type", f.Type)
+	// http.ServeContent(w, r, f.Name(), time.Time{}, f.File)
 
-	http.ServeContent(w, r, f.Name(), time.Time{}, f.File)
+	SendJson(w, http.StatusOK, Payload{
+		"path": r.URL.Path,
+		"dir":  r.URL.RawPath,
+		"q":    r.URL.Query(),
+	})
 }
 
 func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
@@ -250,11 +261,13 @@ func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
 		key := filepath.Join(subP, fh.Filename)
 
 		cfg := &SaveConfig{
-			Reader: f,
-			Key:    key,
+			Reader:   f,
+			FilePath: key,
 		}
 		o := &Object{
-			Type: fh.Header.Get("Content-Type"),
+			Type: &ObjectType{
+				Mime: fh.Header.Get("Content-Type"),
+			},
 		}
 		scfg.Push(o, cfg)
 	}
@@ -265,9 +278,15 @@ func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s3Uri := BuildS3Path(&S3Path{
+		Bucket:  b,
+		RawPath: subP,
+	})
+
 	resp := UploadedObjectsResponse{
 		Bucket:  b,
 		Subpath: subP,
+		Path:    s3Uri,
 	}
 	resp.FromObjects(objs)
 

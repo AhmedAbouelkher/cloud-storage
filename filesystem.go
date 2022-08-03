@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -67,6 +68,67 @@ func DeleteDir(dir string, force bool) error {
 		}
 	}
 	return nil
+}
+
+func ListFilesInDir(dir string) ([]*os.File, error) {
+	str, sErr := GetStorage()
+	if sErr != nil {
+		return nil, sErr
+	}
+	path := filepath.Join(str, dir)
+
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var fs []*os.File
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		p := filepath.Join(path, file.Name())
+
+		f, err := os.Open(p)
+		if err != nil {
+			return nil, err
+		}
+
+		fs = append(fs, f)
+	}
+
+	return fs, nil
+}
+
+func CloseFiles(fs []*os.File) error {
+	for _, f := range fs {
+		if err := f.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// check if directory is empty
+func IsEmptyDir(dir string) (bool, error) {
+	str, sErr := GetStorage()
+	if sErr != nil {
+		return false, sErr
+	}
+	path := filepath.Join(str, dir)
+
+	d, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer d.Close()
+
+	_, err = d.Readdirnames(1) // Or f.Readdir(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, err
 }
 
 //Delete file giving the path as p
