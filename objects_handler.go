@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"errors"
-	"io"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -142,79 +140,31 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleServingRequestedObject(w http.ResponseWriter, r *http.Request) {
-	// uuid := mux.Vars(r)["uuid"]
-	// session := r.URL.Query().Get("session")
-
-	// if uuid == "" || session == "" {
-	// 	SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("uuid and session are required"))
-	// 	return
-	// }
-
-	// uuid = NameWithoutExt(uuid) //remove extension from uuid
-	// f, err := ServeObject(uuid, session)
-	// if err != nil {
-	// 	if errors.Is(err, ErrSessionExpired) {
-	// 		SendHttpJsonError(w, http.StatusForbidden, err)
-	// 		return
-	// 	} else if errors.Is(err, ErrSessionNotFound) {
-	// 		SendHttpJsonError(w, http.StatusUnauthorized, err)
-	// 		return
-	// 	}
-	// 	SendHttpJsonError(w, http.StatusInternalServerError, err)
-	// 	return
-	// }
-
-	// defer f.Close()
-
-	// w.Header().Set("Content-Type", f.Type)
-	// http.ServeContent(w, r, f.Name(), time.Time{}, f.File)
-
-	SendJson(w, http.StatusOK, Payload{
-		"path": r.URL.Path,
-		"dir":  r.URL.RawPath,
-		"q":    r.URL.Query(),
-	})
-}
-
-func HandleFileUpload(w http.ResponseWriter, r *http.Request) {
-	if IsProduction() {
-		SendHttpJsonError(w, http.StatusUnauthorized, errors.New("access is not allowed"))
-		return
-	}
-
-	if err := r.ParseMultipartForm(MaxUploadLimit); err != nil {
+	shareUri, err := ParseShareUri(r.URL)
+	if err != nil {
 		SendHttpJsonError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	f, h, err := r.FormFile("file")
+	f, err := ServeObject(shareUri)
 	if err != nil {
-		SendHttpJsonError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
-	defer f.Close()
-	defer r.Body.Close()
-
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, f); err != nil {
+		if errors.Is(err, ErrSessionExpired) {
+			SendHttpJsonError(w, http.StatusForbidden, err)
+			return
+		} else if errors.Is(err, ErrSessionNotFound) {
+			SendHttpJsonError(w, http.StatusUnauthorized, err)
+			return
+		} else if errors.Is(err, ErrObjectNotFound) {
+			SendHttpJsonError(w, http.StatusNotFound, err)
+			return
+		}
 		SendHttpJsonError(w, http.StatusInternalServerError, err)
 		return
 	}
+	defer f.Close()
 
-	c := buf.String()
-	if h.Size > 1024 {
-		c = c[:1024]
-	}
-
-	SendJson(w, http.StatusOK, Payload{
-		"message": "object uploaded",
-		"name": Payload{
-			"original":  h.Filename,
-			"extension": h.Header.Get("Content-Type"),
-			"size":      h.Size,
-		},
-		"content": c,
-	})
+	w.Header().Set("Content-Type", f.Type)
+	http.ServeContent(w, r, f.Name(), time.Time{}, f.File)
 }
 
 func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +194,7 @@ func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
 			SendHttpJsonError(w, http.StatusUnprocessableEntity, errors.New("subpath must be absolute"))
 			return
 		}
+		subP = strings.TrimPrefix(subP, "/")
 	}
 
 	scfg := SaveMultipleConfig{
@@ -258,18 +209,16 @@ func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
 		}
 		defer f.Close()
 
-		key := filepath.Join(subP, fh.Filename)
+		fPath := filepath.Join(subP, fh.Filename)
 
 		cfg := &SaveConfig{
 			Reader:   f,
-			FilePath: key,
+			FilePath: fPath,
+			Bucket:   b,
+			Ext:      strings.TrimPrefix(filepath.Ext(fh.Filename), "."),
+			Mime:     fh.Header.Get("Content-Type"),
 		}
-		o := &Object{
-			Type: &ObjectType{
-				Mime: fh.Header.Get("Content-Type"),
-			},
-		}
-		scfg.Push(o, cfg)
+		scfg.Push(cfg)
 	}
 
 	objs, err := scfg.Save()

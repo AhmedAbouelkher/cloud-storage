@@ -13,10 +13,11 @@ import (
 
 type ObjectSharingSession struct {
 	mgm.DefaultModel `bson:",inline"`
-	TTL              time.Duration          `json:"ttl"`
-	ExpiryDate       time.Time              `bson:"expiry_date" json:"expiry_date"`
-	Metadata         map[string]interface{} `json:"metadata"`
-	EntityTag        string                 `json:"entity_tag" bson:"entity_tag"`
+	TTL              time.Duration `json:"ttl"`
+	ExpiryDate       time.Time     `bson:"expiry_date" json:"expiry_date"`
+	EntityTag        string        `json:"entity_tag" bson:"entity_tag"`
+
+	Metadata map[string]interface{} `json:"metadata"`
 }
 
 func (s *ObjectSharingSession) CreateIndex() error {
@@ -24,7 +25,6 @@ func (s *ObjectSharingSession) CreateIndex() error {
 	_, err := col.Indexes().CreateOne(context.Background(), mongo.IndexModel{
 		Keys: bson.M{"entity_tag": 1},
 		Options: options.MergeIndexOptions(
-			options.Index().SetUnique(true),
 			options.Index().SetName("entity_tag"),
 		),
 	})

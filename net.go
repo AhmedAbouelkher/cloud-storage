@@ -168,5 +168,8 @@ func Base64Encode(b []byte) string {
 }
 
 func Base64Decode(s string) ([]byte, error) {
+	if s == "" {
+		return []byte{}, nil
+	}
 	return base64.StdEncoding.DecodeString(s)
 }

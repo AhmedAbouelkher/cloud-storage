@@ -21,7 +21,7 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	// logger := log.New(os.Stdout, "", log.LstdFlags)
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		SendJson(w, http.StatusOK, Payload{
@@ -47,8 +47,6 @@ func main() {
 	r.HandleFunc("/object/{uuid}", HandleObjectDeletion).Methods(http.MethodDelete)
 	r.HandleFunc("/object/{uuid}", HandleObjectFetch).Methods(http.MethodGet)
 
-	r.HandleFunc("/upload", HandleFileUpload).Methods(http.MethodPost)
-
 	// Object share
 	// r.HandleFunc("/share/{bucket}/{uuid}", HandleServingRequestedObject).Methods(http.MethodGet)
 	r.PathPrefix("/share").HandlerFunc(HandleServingRequestedObject).Methods(http.MethodGet)
@@ -66,7 +64,7 @@ func main() {
 			n.ServeHTTP(w, r)
 		})
 	})
-	r.Use(NewLogMiddleware(logger).Func())
+	// r.Use(NewLogMiddleware(logger).Func())
 
 	router := func() http.Handler {
 		rps := 5.0

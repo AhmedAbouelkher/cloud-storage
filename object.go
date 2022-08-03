@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,8 +20,10 @@ import (
 var (
 	ErrSessionExpired   = errors.New("session expired")
 	ErrSessionNotFound  = errors.New("session not found")
+	ErrInvalidSession   = errors.New("invalid session")
 	ErrBucketNotFound   = errors.New("bucket not found")
 	ErrResourceNotFound = errors.New("resource not found")
+	ErrObjectNotFound   = errors.New("object not found")
 )
 
 type ObjectType struct {
@@ -57,12 +58,9 @@ func (o *Object) CreateIndexes() error {
 					options.Index().SetName("entity_tag"),
 				),
 			},
-			{
-				Keys: bson.M{"bucket_id": 1},
-			},
-			{
-				Keys: bson.M{"resource_id": 1},
-			},
+			{Keys: bson.M{"title": 1}},
+			{Keys: bson.M{"bucket_id": 1}},
+			{Keys: bson.M{"resource_id": 1}},
 		},
 		nil,
 	)
@@ -117,8 +115,8 @@ func (o *Object) GetKeyDetails() (*Bucket, *Resource, error) {
 }
 
 func (o *Object) Path(bkt *Bucket) (string, error) {
-	bktN := bkt.Name
-	if bktN == "" {
+	bktN := ""
+	if bkt == nil {
 		b, err := o.GetBucket()
 		if err != nil {
 			return "", err
@@ -194,6 +192,7 @@ func (o *Object) Create(cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 	return createObject(o, cfg, bkt)
 }
 
+//TODO: make each object unique for each key
 func createObject(o *Object, cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 	// fetch bucket with id
 	o.Bucket = bkt.ID
@@ -341,17 +340,17 @@ func (o *Object) GenerateSharableLink(shr *ObjectShare) (string, *ObjectSharingS
 		return "", nil, err
 	}
 
-	p, err := o.Path(bkt)
+	k, err := o.Key()
 	if err != nil {
 		return "", nil, err
 	}
 
-	uri, err := JoinUrl(fmt.Sprintf(
-		"/share/%s?ttl=%d&session=%s",
-		p,
-		ttl,
-		Base64Encode([]byte(session.ID.Hex())),
-	))
+	uri, err := CreateShareUri(&ShareUri{
+		Session: session.ID.Hex(),
+		TTL:     ttl,
+		Bucket:  bkt.Name,
+		Key:     k,
+	})
 	if err != nil {
 		return "", nil, err
 	}
@@ -378,19 +377,33 @@ func (f *ServedFile) Name() string {
 }
 
 // Serve object from local filesystem
-func ServeObject(tag string, sid string) (*ServedFile, error) {
+func ServeObject(su *ShareUri) (*ServedFile, error) {
 	// fetch object latest sharing session
-	id, _ := Base64Decode(sid)
-	if err := checkSession(tag, string(id)); err != nil {
+	fltr := bson.M{}
+
+	ss, err := checkSession(su.Session)
+	if err != nil {
 		return nil, err
 	}
+	fltr["entity_tag"] = ss.EntityTag
 
 	// Fetch metadata from database
 	o := &Object{}
-	if err := mgm.Coll(o).FindOne(
+
+	res := mgm.Coll(o).FindOne(
 		context.Background(),
-		bson.M{"entity_tag": tag},
-	).Decode(o); err != nil {
+		fltr,
+	)
+
+	fErr := res.Err()
+	if fErr != nil {
+		if errors.Is(fErr, mongo.ErrNoDocuments) {
+			return nil, ErrObjectNotFound
+		}
+		return nil, fErr
+	}
+
+	if err := res.Decode(o); err != nil {
 		return nil, err
 	}
 
@@ -410,23 +423,20 @@ func ServeObject(tag string, sid string) (*ServedFile, error) {
 	}, nil
 }
 
-func checkSession(tag string, sid string) error {
+func checkSession(sid string) (*ObjectSharingSession, error) {
 	// fetch object latest sharing session
 	s, err := FetchSession(sid)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return ErrSessionExpired
+			return nil, ErrSessionNotFound
 		}
-		return err
-	}
-	if bgs, _ := s.BelongToObj(tag); !bgs {
-		return ErrSessionNotFound
+		return nil, err
 	}
 
 	if s.CheckExpiration() {
-		return ErrSessionExpired
+		return nil, ErrSessionExpired
 	}
-	return nil
+	return s, nil
 }
 
 type SaveMultipleConfig struct {
@@ -439,8 +449,8 @@ func (s *SaveMultipleConfig) Save() ([]*Object, error) {
 	return SaveMultipleObjects(context.Background(), s)
 }
 
-func (s *SaveMultipleConfig) Push(o *Object, cfg *SaveConfig) {
-	s.Objects = append(s.Objects, o)
+func (s *SaveMultipleConfig) Push(cfg *SaveConfig) {
+	s.Objects = append(s.Objects, &Object{})
 	s.Configs = append(s.Configs, cfg)
 }
 
