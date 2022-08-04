@@ -10,15 +10,21 @@ import (
 )
 
 type ShareUri struct {
-	Session  string                 `json:"session"`
-	TTL      time.Duration          `json:"ttl"`
-	Bucket   string                 `json:"bucket"`
-	Key      string                 `json:"key"`
-	Metadata map[string]interface{} `json:"metadata"`
+	Session  string        `json:"session"`
+	TTL      time.Duration `json:"ttl"`
+	Bucket   string        `json:"bucket"`
+	Key      string        `json:"key"`
+	Metadata Metadata      `json:"metadata"`
 }
 
 func (s *ShareUri) FileName() string {
 	return filepath.Base(s.Key)
+}
+
+func (s *ShareUri) ResourceKey() string {
+	k := strings.Split(s.Key, "/")
+	p := k[:len(k)-1]
+	return strings.Join(p, "/")
 }
 
 func (s *ShareUri) String() (string, error) {
@@ -37,16 +43,19 @@ func CreateShareUri(s *ShareUri) (string, error) {
 
 func ParseShareUri(u *url.URL) (*ShareUri, error) {
 	p := strings.TrimPrefix(u.Path, "/share/")
+
 	s, _ := Base64Decode(u.Query().Get("session"))
 	ttl, _ := strconv.ParseInt(u.Query().Get("ttl"), 10, 32)
+
 	pth := strings.Split(p, "/")
 	b := pth[0]
 	k := filepath.Join(pth[1:]...)
+
 	return &ShareUri{
 		Session:  string(s),
 		TTL:      time.Duration(ttl),
 		Bucket:   b,
 		Key:      k,
-		Metadata: map[string]interface{}{},
+		Metadata: Metadata{},
 	}, nil
 }

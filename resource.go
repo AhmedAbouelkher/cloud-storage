@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/kamva/mgm/v3"
@@ -21,7 +22,7 @@ type Resource struct {
 	Bucket           string `json:"bucket"`
 	Key              string `json:"key"`
 
-	Metadata map[string]interface{} `json:"metadata"`
+	Metadata Metadata `json:"metadata"`
 }
 
 type ObjectFile struct {
@@ -146,6 +147,27 @@ func FindResource(query *Resource) (*Resource, error) {
 	}
 
 	return r, nil
+}
+
+func GetResourceID(key string) (*primitive.ObjectID, error) {
+	p := strings.Split(key, "/")
+	n := p[len(p)-1]
+
+	r := &Resource{}
+	err := mgm.Coll(r).First(
+		bson.M{"name": n},
+		r,
+		options.FindOne().SetProjection(bson.M{"_id": 1}),
+	)
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrResourceNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return &r.ID, nil
 }
 
 func FindResourceByID(ID primitive.ObjectID) (*Resource, error) {

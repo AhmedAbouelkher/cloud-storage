@@ -13,14 +13,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const (
-	BucketCollection = "buckets"
-)
-
 type Bucket struct {
 	mgm.DefaultModel `bson:",inline"`
-	Name             string                 `json:"name"`
-	Metadata         map[string]interface{} `json:"metadata"`
+	Name             string   `json:"name"`
+	Metadata         Metadata `json:"metadata"`
 }
 
 func (o *Bucket) CreateIndex() error {
@@ -75,7 +71,7 @@ func (b *Bucket) mutateName() error {
 
 func normalizeName(name string) string {
 	// replace all special characters with underscore
-	r := regexp.MustCompile(`[\s$&+,:;=?@#|'<>.^*()%!-]`)
+	r := regexp.MustCompile(`[\s$&+,:;=?@#|'<>.^*()%!]`)
 	return strings.ToLower(r.ReplaceAllString(name, "_"))
 }
 
@@ -113,10 +109,31 @@ func FetchBucket(name string) (*Bucket, error) {
 	err := mgm.Coll(&Bucket{}).First(bson.M{"name": name}, &b)
 
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrBucketNotFound
+		}
 		return nil, err
 	}
 
 	return &b, nil
+}
+
+func GetBucketID(name string) (*primitive.ObjectID, error) {
+	var b Bucket
+	err := mgm.Coll(&Bucket{}).First(
+		bson.M{"name": name},
+		&b,
+		options.FindOne().SetProjection(bson.M{"_id": 1}),
+	)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrBucketNotFound
+		}
+		return nil, err
+	}
+
+	return &b.ID, nil
 }
 
 func FetchBucketByID(ID primitive.ObjectID) (*Bucket, error) {
@@ -161,7 +178,7 @@ func FetchBucketObjects(b *Bucket) ([]Object, error) {
 	var objects []Object
 	cur, err := mgm.Coll(&Object{}).Find(
 		context.Background(),
-		bson.M{"bucketname": b.Name},
+		bson.M{"name": b.Name},
 	)
 	if err != nil {
 		return nil, err

@@ -118,6 +118,10 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 
 	o, err := FindObject(uuid)
 	if err != nil {
+		if errors.Is(err, ErrObjectNotFound) {
+			SendHttpJsonError(w, http.StatusNotFound, err)
+			return
+		}
 		SendHttpJsonError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -132,7 +136,7 @@ func HandleGeneratingSharableLink(w http.ResponseWriter, r *http.Request) {
 
 	SendJson(w, http.StatusOK, Payload{
 		"url":        l,
-		"uuid":       s.EntityTag,
+		"entity_tag": s.EntityTag,
 		"ttl":        s.TTL,
 		"session_id": s.ID,
 		"expire_at":  s.ExpiryDate.Format(time.RFC3339),
@@ -240,4 +244,26 @@ func HandleObjectsCreation(w http.ResponseWriter, r *http.Request) {
 	resp.FromObjects(objs)
 
 	SendJson(w, http.StatusOK, resp)
+}
+
+func HandleServingDirectObject(w http.ResponseWriter, r *http.Request) {
+	accessUri, err := ParseAccessUri(r.URL)
+	if err != nil {
+		SendHttpJsonError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	of, err := DirectObjectServe(accessUri)
+	if err != nil {
+		if errors.Is(err, ErrObjectNotFound) {
+			SendHttpJsonError(w, http.StatusNotFound, err)
+			return
+		}
+		SendHttpJsonError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer of.Close()
+
+	w.Header().Set("Content-Type", of.Type)
+	http.ServeContent(w, r, of.Name(), time.Time{}, of.File)
 }

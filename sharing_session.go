@@ -17,7 +17,7 @@ type ObjectSharingSession struct {
 	ExpiryDate       time.Time     `bson:"expiry_date" json:"expiry_date"`
 	EntityTag        string        `json:"entity_tag" bson:"entity_tag"`
 
-	Metadata map[string]interface{} `json:"metadata"`
+	Metadata Metadata `json:"metadata"`
 }
 
 func (s *ObjectSharingSession) CreateIndex() error {

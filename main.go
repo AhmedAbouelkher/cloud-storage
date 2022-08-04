@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -21,7 +22,7 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	// logger := log.New(os.Stdout, "", log.LstdFlags)
+	logger := log.New(os.Stdout, "", log.LstdFlags)
 
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		SendJson(w, http.StatusOK, Payload{
@@ -47,9 +48,9 @@ func main() {
 	r.HandleFunc("/object/{uuid}", HandleObjectDeletion).Methods(http.MethodDelete)
 	r.HandleFunc("/object/{uuid}", HandleObjectFetch).Methods(http.MethodGet)
 
-	// Object share
-	// r.HandleFunc("/share/{bucket}/{uuid}", HandleServingRequestedObject).Methods(http.MethodGet)
+	// Object Serving
 	r.PathPrefix("/share").HandlerFunc(HandleServingRequestedObject).Methods(http.MethodGet)
+	r.PathPrefix("/").HandlerFunc(HandleServingDirectObject).Methods(http.MethodGet)
 
 	// Resources
 	r.HandleFunc("/resource/s3", HandleResourceFetchWithS3).Methods(http.MethodGet)
@@ -64,7 +65,7 @@ func main() {
 			n.ServeHTTP(w, r)
 		})
 	})
-	// r.Use(NewLogMiddleware(logger).Func())
+	r.Use(NewLogMiddleware(logger).Func())
 
 	router := func() http.Handler {
 		rps := 5.0
@@ -82,7 +83,6 @@ func main() {
 	}
 	SetTLSConfigs(srv.TLSConfig)
 
-	log.Printf("Server is starting on port %s [%s] \n", os.Getenv("PORT"), srv.Addr)
-
+	fmt.Printf("Server is starting on port %s [%s] \n", os.Getenv("PORT"), srv.Addr)
 	log.Fatal(srv.ListenAndServe())
 }

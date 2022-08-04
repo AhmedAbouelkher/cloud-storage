@@ -3,11 +3,6 @@
 ## Goals
 
 - Can access resources *directories* content like fetching from an api.
-example:
-```
-s3://{bucket}/{resource}/{path/to/object}
-```
-
 - Can limit access to resource.
 
 ## Description

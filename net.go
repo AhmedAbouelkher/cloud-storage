@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -151,8 +152,8 @@ func BuildS3Path(s3 *S3Path) string {
 }
 
 func ParseS3Path(p string) (*S3Path, error) {
-	if !strings.HasPrefix(p, "s3://") {
-		return nil, fmt.Errorf("invalid s3 path: %s", p)
+	if !ValidS3Url(p) {
+		return nil, errors.New("invalid s3 url")
 	}
 	p = strings.TrimPrefix(p, "s3://")
 	p = strings.TrimSuffix(p, "/")
@@ -161,6 +162,11 @@ func ParseS3Path(p string) (*S3Path, error) {
 		Bucket: pth[0],
 		Paths:  pth[1:],
 	}, nil
+}
+
+func ValidS3Url(u string) bool {
+	r := regexp.MustCompile(`^s3:\/\/([^/]+)\/([\w\W]+)\.(.*)`)
+	return r.MatchString(u)
 }
 
 func Base64Encode(b []byte) string {

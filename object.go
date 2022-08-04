@@ -17,15 +17,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var (
-	ErrSessionExpired   = errors.New("session expired")
-	ErrSessionNotFound  = errors.New("session not found")
-	ErrInvalidSession   = errors.New("invalid session")
-	ErrBucketNotFound   = errors.New("bucket not found")
-	ErrResourceNotFound = errors.New("resource not found")
-	ErrObjectNotFound   = errors.New("object not found")
-)
-
 type ObjectType struct {
 	Ext  string `json:"ext"`
 	Mime string `json:"mime"`
@@ -37,13 +28,15 @@ type Object struct {
 	EntityTag string `json:"entity_tag" bson:"entity_tag"`
 	Title     string `json:"title"`
 
-	Bucket   primitive.ObjectID `json:"bucket_id" bson:"bucket_id"`
-	Resource primitive.ObjectID `json:"resource_id" bson:"resource_id"`
+	Bucket primitive.ObjectID `json:"bucket_id" bson:"bucket_id"`
+
+	// Resource is a pointer to make it nullable
+	Resource *primitive.ObjectID `json:"resource_id" bson:"resource_id"`
 
 	Size int         `json:"size"`
 	Type *ObjectType `json:"type"`
 
-	Metadata map[string]interface{} `json:"metadata"`
+	Metadata Metadata `json:"metadata"`
 }
 
 func (o *Object) CreateIndexes() error {
@@ -87,7 +80,12 @@ func (o *Object) GetBucket() (*Bucket, error) {
 }
 
 func (o *Object) GetResource() (*Resource, error) {
-	r, err := FindResourceByID(o.Resource)
+	if o.Resource == nil {
+		return &Resource{}, nil
+	}
+
+	rv := *o.Resource
+	r, err := FindResourceByID(rv)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +93,7 @@ func (o *Object) GetResource() (*Resource, error) {
 		return nil, ErrResourceNotFound
 	}
 
-	if r.ID != o.Resource {
+	if r.ID != rv {
 		return nil, ErrResourceNotFound
 	}
 
@@ -139,12 +137,13 @@ func (o *Object) Key() (string, error) {
 	return filepath.Join(r.Key, o.Title), nil
 }
 
-// s3: s3://bucket/resource/title.txt
+// s3 example: s3://bucket/resource/title.txt
 func (o *Object) S3() (string, error) {
 	b, r, err := o.GetKeyDetails()
 	if err != nil {
 		return "", err
 	}
+
 	s3 := &S3Path{
 		Bucket:  b.Name,
 		RawPath: filepath.Join(r.Key, o.Title),
@@ -196,6 +195,7 @@ func (o *Object) Create(cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 func createObject(o *Object, cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 	// fetch bucket with id
 	o.Bucket = bkt.ID
+	o.Resource = nil
 	o.Type = &ObjectType{}
 	o.Type.Ext = cfg.Ext
 	o.Type.Mime = cfg.Mime
@@ -222,7 +222,7 @@ func createObject(o *Object, cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 		if err != nil {
 			return nil, err
 		}
-		o.Resource = r.ID
+		o.Resource = &r.ID
 		sfp = r.Path()
 	}
 
@@ -270,6 +270,9 @@ func FindObject(tag string) (*Object, error) {
 		context.Background(),
 		bson.M{"entity_tag": tag},
 	).Decode(o); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrObjectNotFound
+		}
 		return nil, err
 	}
 	return o, nil
@@ -309,7 +312,7 @@ type ObjectShare struct {
 	// Link expiration date in seconds
 	TTL time.Duration
 
-	Metadata map[string]interface{}
+	Metadata Metadata
 }
 
 func (o *Object) GenerateSharableLink(shr *ObjectShare) (string, *ObjectSharingSession, error) {
@@ -359,84 +362,6 @@ func (o *Object) GenerateSharableLink(shr *ObjectShare) (string, *ObjectSharingS
 
 func CalculateExpiration(ttl time.Duration) time.Time {
 	return time.Now().Add(ttl * time.Second)
-}
-
-type ServedFile struct {
-	File *os.File
-	Type string
-}
-
-// close ServedFile
-func (f *ServedFile) Close() error {
-	return f.File.Close()
-}
-
-// show file name from served file
-func (f *ServedFile) Name() string {
-	return f.File.Name()
-}
-
-// Serve object from local filesystem
-func ServeObject(su *ShareUri) (*ServedFile, error) {
-	// fetch object latest sharing session
-	fltr := bson.M{}
-
-	ss, err := checkSession(su.Session)
-	if err != nil {
-		return nil, err
-	}
-	fltr["entity_tag"] = ss.EntityTag
-
-	// Fetch metadata from database
-	o := &Object{}
-
-	res := mgm.Coll(o).FindOne(
-		context.Background(),
-		fltr,
-	)
-
-	fErr := res.Err()
-	if fErr != nil {
-		if errors.Is(fErr, mongo.ErrNoDocuments) {
-			return nil, ErrObjectNotFound
-		}
-		return nil, fErr
-	}
-
-	if err := res.Decode(o); err != nil {
-		return nil, err
-	}
-
-	p, err := o.Path(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Serve object
-	f, err := GetFile(p)
-	if err != nil {
-		return nil, err
-	}
-	return &ServedFile{
-		File: f,
-		Type: o.Type.Mime,
-	}, nil
-}
-
-func checkSession(sid string) (*ObjectSharingSession, error) {
-	// fetch object latest sharing session
-	s, err := FetchSession(sid)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, ErrSessionNotFound
-		}
-		return nil, err
-	}
-
-	if s.CheckExpiration() {
-		return nil, ErrSessionExpired
-	}
-	return s, nil
 }
 
 type SaveMultipleConfig struct {
@@ -494,4 +419,131 @@ func (u *UploadedObjectsResponse) FromObjects(objs []*Object) {
 	for _, o := range objs {
 		u.Objects = append(u.Objects, *o)
 	}
+}
+
+func DirectObjectServe(au *AccessUri) (*ServedFile, error) {
+	// - get bucket id
+	bid, err := GetBucketID(au.Bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	fltr := bson.M{
+		"title":       au.FileName(),
+		"bucket_id":   bid,
+		"resource_id": nil,
+	}
+
+	// - get resource id
+	rk := au.ResourceKey()
+	if rk != "" {
+		rid, err := GetResourceID(rk)
+		if err != nil {
+			return nil, err
+		}
+		fltr["resource_id"] = rid
+	}
+
+	return serveObject(fltr)
+}
+
+type ServedFile struct {
+	File *os.File
+	Type string
+}
+
+// close ServedFile
+func (f *ServedFile) Close() error {
+	return f.File.Close()
+}
+
+// show file name from served file
+func (f *ServedFile) Name() string {
+	return f.File.Name()
+}
+
+// Serve object from local filesystem
+func ServeObject(su *ShareUri) (*ServedFile, error) {
+	// fetch object latest sharing session
+	ss, err := checkSession(su.Session)
+	if err != nil {
+		return nil, err
+	}
+
+	// - get bucket id
+	bid, err := GetBucketID(su.Bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	fltr := bson.M{
+		"entity_tag":  ss.EntityTag,
+		"bucket_id":   bid,
+		"resource_id": nil,
+	}
+
+	// - get resource id
+	rk := su.ResourceKey()
+	if rk != "" {
+		rid, err := GetResourceID(rk)
+		if err != nil {
+			return nil, err
+		}
+		fltr["resource_id"] = rid
+	}
+
+	// Fetch metadata from database
+	// Serve object
+	return serveObject(fltr)
+}
+
+func serveObject(fltr primitive.M) (*ServedFile, error) {
+	o := &Object{}
+
+	res := mgm.Coll(o).FindOne(
+		context.Background(),
+		fltr,
+	)
+
+	fErr := res.Err()
+	if fErr != nil {
+		if errors.Is(fErr, mongo.ErrNoDocuments) {
+			return nil, ErrObjectNotFound
+		}
+		return nil, fErr
+	}
+
+	if err := res.Decode(o); err != nil {
+		return nil, err
+	}
+
+	p, err := o.Path(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := GetFile(p)
+	if err != nil {
+		return nil, err
+	}
+	return &ServedFile{
+		File: f,
+		Type: o.Type.Mime,
+	}, nil
+}
+
+func checkSession(sid string) (*ObjectSharingSession, error) {
+	// fetch object latest sharing session
+	s, err := FetchSession(sid)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrSessionNotFound
+		}
+		return nil, err
+	}
+
+	if s.CheckExpiration() {
+		return nil, ErrSessionExpired
+	}
+	return s, nil
 }
