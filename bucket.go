@@ -141,7 +141,7 @@ func FetchBucketByID(ID primitive.ObjectID) (*Bucket, error) {
 	err := mgm.Coll(&Bucket{}).FindByID(ID, &b)
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return nil, nil
+		return nil, ErrBucketNotFound
 	}
 
 	if err != nil {

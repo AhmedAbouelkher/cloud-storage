@@ -18,18 +18,20 @@ func HandleResourceCreation(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	rsrc := &Resource{
-		Name:   payload.Name,
-		Bucket: payload.Bucket,
+		Name: payload.Name,
 	}
 
-	if err := rsrc.Create(); err != nil {
+	if err := rsrc.Create(payload.Bucket); err != nil {
 		SendHttpJsonError(w, http.StatusBadRequest, err)
 		return
 	}
+
+	s3, _ := rsrc.S3Path()
+
 	SendJson(w, http.StatusCreated, Payload{
 		"message":  "resource created",
 		"resource": rsrc,
-		"s3_path":  rsrc.S3Path(),
+		"s3_path":  s3,
 	})
 }
 
@@ -112,8 +114,10 @@ func HandleResourceDeletion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s3, _ := rsrc.S3Path()
+
 	SendJson(w, http.StatusOK, Payload{
 		"message": "resource deleted",
-		"s3_path": rsrc.S3Path(),
+		"s3_path": s3,
 	})
 }

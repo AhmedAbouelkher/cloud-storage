@@ -17,6 +17,8 @@ func main() {
 		panic(err)
 	}
 
+	OpenInMemoryCache()
+
 	if err := OpenDBConnection(); err != nil {
 		panic(err)
 	}
@@ -48,15 +50,20 @@ func main() {
 	r.HandleFunc("/object/{uuid}", HandleObjectDeletion).Methods(http.MethodDelete)
 	r.HandleFunc("/object/{uuid}", HandleObjectFetch).Methods(http.MethodGet)
 
-	// Object Serving
-	r.PathPrefix("/share").HandlerFunc(HandleServingRequestedObject).Methods(http.MethodGet)
-	r.PathPrefix("/").HandlerFunc(HandleServingDirectObject).Methods(http.MethodGet)
-
 	// Resources
 	r.HandleFunc("/resource/s3", HandleResourceFetchWithS3).Methods(http.MethodGet)
 	r.HandleFunc("/resource/s3/objects", HandleResourceFilesFetchWithS3).Methods(http.MethodGet)
 	r.HandleFunc("/resource", HandleResourceCreation).Methods(http.MethodPost)
 	r.HandleFunc("/resource", HandleResourceDeletion).Methods(http.MethodDelete)
+
+	r.HandleFunc("/cache", func(w http.ResponseWriter, r *http.Request) {
+		all := PreviewAllMCache()
+		SendJson(w, http.StatusOK, Payload{"message": all})
+	}).Methods(http.MethodGet)
+
+	// Object Serving
+	r.PathPrefix("/share").HandlerFunc(HandleServingRequestedObject).Methods(http.MethodGet)
+	r.PathPrefix("/").HandlerFunc(HandleServingDirectObject).Methods(http.MethodGet)
 
 	// middlewares
 	r.Use(func(n http.Handler) http.Handler {

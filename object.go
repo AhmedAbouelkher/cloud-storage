@@ -218,7 +218,7 @@ func createObject(o *Object, cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 		sfp = cfg.Path()
 	} else {
 		// create resource and get its directory
-		r, err := createObjectResource(cfg)
+		r, err := createObjectResource(cfg, bkt)
 		if err != nil {
 			return nil, err
 		}
@@ -246,14 +246,14 @@ func createObject(o *Object, cfg *SaveConfig, bkt *Bucket) (*Object, error) {
 	return o, nil
 }
 
-func createObjectResource(cfg *SaveConfig) (*Resource, error) {
+func createObjectResource(cfg *SaveConfig, bkt *Bucket) (*Resource, error) {
 	k := filepath.Dir(cfg.FilePath) // resource key
 	n := filepath.Base(k)           // resource name
 	if n == "" {
 		return nil, errors.New("resource name is empty")
 	}
 	r := &Resource{
-		Bucket: cfg.Bucket,
+		Bucket: bkt.ID,
 		Name:   n,
 		Key:    k,
 	}
@@ -422,26 +422,49 @@ func (u *UploadedObjectsResponse) FromObjects(objs []*Object) {
 }
 
 func DirectObjectServe(au *AccessUri) (*ServedFile, error) {
-	// - get bucket id
-	bid, err := GetBucketID(au.Bucket)
-	if err != nil {
-		return nil, err
-	}
-
 	fltr := bson.M{
 		"title":       au.FileName(),
-		"bucket_id":   bid,
+		"bucket_id":   nil,
 		"resource_id": nil,
 	}
 
-	// - get resource id
-	rk := au.ResourceKey()
-	if rk != "" {
-		rid, err := GetResourceID(rk)
+	// Get bucket id
+	if v, ok := MCacheGet(CKey{au.Bucket}); ok {
+		fltr["bucket_id"] = v.Value
+	} else {
+		bid, err := GetBucketID(au.Bucket)
 		if err != nil {
 			return nil, err
 		}
-		fltr["resource_id"] = rid
+		fltr["bucket_id"] = bid
+		MCacheSet(&CacheEntry{
+			Key: CKey{au.Bucket},
+			Value: CacheValue{
+				Value: bid,
+				TTL:   time.Duration(3600), // only valid for 1 hr
+			},
+		})
+	}
+
+	// Get resource id
+	rk := au.ResourceKey()
+	if rk != "" {
+		if v, ok := MCacheGet(CKey{au.Bucket, rk}); ok {
+			fltr["resource_id"] = v.Value
+		} else {
+			rid, err := GetResourceID(rk)
+			if err != nil {
+				return nil, err
+			}
+			fltr["resource_id"] = rid
+			MCacheSet(&CacheEntry{
+				Key: CKey{au.Bucket, rk},
+				Value: CacheValue{
+					Value: rid,
+					TTL:   time.Duration(3600), // only valid for 1 hr
+				},
+			})
+		}
 	}
 
 	return serveObject(fltr)

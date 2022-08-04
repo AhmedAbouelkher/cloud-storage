@@ -17,10 +17,10 @@ import (
 
 type Resource struct {
 	mgm.DefaultModel `bson:",inline"`
-	UUID             string `json:"uuid"`
-	Name             string `json:"name"`
-	Bucket           string `json:"bucket"`
-	Key              string `json:"key"`
+	UUID             string             `json:"uuid"`
+	Name             string             `json:"name"`
+	Bucket           primitive.ObjectID `json:"bucket_id" bson:"bucket_id"`
+	Key              string             `json:"key"`
 
 	Metadata Metadata `json:"metadata"`
 }
@@ -50,7 +50,7 @@ func (r *Resource) CreateIndexes() error {
 				),
 			},
 			{
-				Keys:    bson.M{"bucket": 1},
+				Keys:    bson.M{"bucket_id": 1},
 				Options: nil,
 			},
 		},
@@ -62,19 +62,55 @@ func (r *Resource) CreateIndexes() error {
 	return nil
 }
 
-func (r *Resource) S3Path() string {
+func (r *Resource) PopulateBucket() error {
+	bkt, err := r.GetBucket()
+	if err != nil {
+		return err
+	}
+	r.Bucket = bkt.ID
+	return nil
+}
+
+func (r *Resource) GetBucket() (*Bucket, error) {
+	bkt, err := FetchBucketByID(r.Bucket)
+	if err != nil {
+		return nil, err
+	}
+	if bkt == nil {
+		return nil, ErrBucketNotFound
+	}
+
+	if bkt.ID != r.Bucket {
+		return nil, ErrBucketNotFound
+	}
+
+	return bkt, nil
+}
+
+func (r *Resource) S3Path() (string, error) {
+	bkt, err := r.GetBucket()
+	if err != nil {
+		return "", err
+	}
 	s3 := S3Path{
-		Bucket: r.Bucket,
+		Bucket: bkt.Name,
 		Paths:  []string{r.Key},
 	}
-	return s3.String()
+	return s3.String(), nil
 }
 
 func (r *Resource) Path() string {
-	return filepath.Join(r.Bucket, r.Key)
+	bkt, err := r.GetBucket()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(bkt.Name, r.Key)
 }
 
-func (r *Resource) Create() error {
+func (r *Resource) Create(bkt string) error {
+	if err := r.PopulateBucket(); err != nil {
+		return err
+	}
 	return FindOrCreateResource(r)
 }
 
@@ -94,8 +130,12 @@ func FindOrCreateResource(r *Resource) error {
 }
 
 func FindWithS3(s3 *S3Path, r *Resource) error {
+	bkt, err := FetchBucket(s3.Bucket)
+	if err != nil {
+		return err
+	}
 	q := &Resource{
-		Bucket: s3.Bucket,
+		Bucket: bkt.ID,
 		Name:   s3.Paths[0],
 	}
 	rsrc, err := FindResource(q)
@@ -187,12 +227,8 @@ func FindResourceByID(ID primitive.ObjectID) (*Resource, error) {
 
 func createResource(r *Resource) error {
 	// Validate bucket existence
-	ext, err := BucketExists(r.Bucket)
-	if err != nil {
+	if _, err := FetchBucketByID(r.Bucket); err != nil {
 		return err
-	}
-	if !ext {
-		return errors.New("bucket does not exist")
 	}
 
 	if r.Name == "" {
@@ -312,10 +348,9 @@ func mapToObjectFiles(files []*os.File, r *Resource) []*ObjectFile {
 	objects := []*ObjectFile{}
 	for _, f := range files {
 		// find object file in database
-
 		objects = append(objects, &ObjectFile{
 			File:     f,
-			Bucket:   r.Bucket,
+			Bucket:   "-",
 			Resource: r,
 			Object:   &Object{},
 		})

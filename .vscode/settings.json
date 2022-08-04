@@ -23,6 +23,7 @@
         "rsrc",
         "scfg",
         "struct",
-        "Subrouter"
+        "Subrouter",
+        "syncmap"
     ]
 }
