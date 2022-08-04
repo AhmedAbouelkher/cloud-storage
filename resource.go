@@ -277,7 +277,7 @@ func deleteResource(r *Resource, force bool) error {
 		return err
 	}
 	if rsrc == nil {
-		return errors.New("resource not found")
+		return ErrResourceNotFound
 	}
 
 	if !force {

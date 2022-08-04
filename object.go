@@ -461,7 +461,7 @@ func DirectObjectServe(au *AccessUri) (*ServedFile, error) {
 				Key: CKey{au.Bucket, rk},
 				Value: CacheValue{
 					Value: rid,
-					TTL:   time.Duration(3600), // only valid for 1 hr
+					TTL:   time.Duration(600), // only valid for 10 minutes
 				},
 			})
 		}

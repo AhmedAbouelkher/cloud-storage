@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
@@ -62,15 +63,22 @@ func MCacheGet(k CKey) (*CacheValue, bool) {
 }
 
 func constructCacheKey(ks ...string) string {
-	return "cache:" + strings.Join(ks, ":")
+	return "cache:" + normalizeKey(strings.Join(ks, ":"))
+}
+
+func normalizeKey(name string) string {
+	// replace all special characters (Except ":", "-" and "/") with underscore
+	r := regexp.MustCompile(`[\s$&+,;=?@#|'<>.^*()%!]`)
+	return strings.ToLower(r.ReplaceAllString(name, "_"))
 }
 
 func PreviewAllMCache() []map[string]any {
 	entries := []map[string]any{}
 	cache.Range(func(key, value any) bool {
 		entries = append(entries, map[string]any{
-			"Value": value,
-			"Key":   key,
+			"Value":  value,
+			"Key":    key,
+			"Expire": ttlCache[key.(string)],
 		})
 		return true
 	})

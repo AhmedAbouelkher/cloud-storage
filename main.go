@@ -69,6 +69,7 @@ func main() {
 	r.Use(func(n http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("cache-control", "no-cache")
 			n.ServeHTTP(w, r)
 		})
 	})
