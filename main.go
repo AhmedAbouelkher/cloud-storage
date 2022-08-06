@@ -32,11 +32,11 @@ func main() {
 			"description":        "A simple object storage with golang",
 			"postman_collection": "https://github.com/AhmedAbouelkher/cloud-storage/blob/master/postman/cloud-storage.postman_collection.json",
 		})
-	}).Methods("GET")
+	}).Methods(http.MethodGet)
 
 	r.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		SendJson(w, http.StatusOK, Payload{"message": "pong"})
-	}).Methods("GET")
+	}).Methods(http.MethodGet)
 
 	// Buckets
 	r.HandleFunc("/bucket", HandleBucketCreation).Methods(http.MethodPost)
@@ -56,11 +56,6 @@ func main() {
 	r.HandleFunc("/resource", HandleResourceCreation).Methods(http.MethodPost)
 	r.HandleFunc("/resource", HandleResourceDeletion).Methods(http.MethodDelete)
 
-	r.HandleFunc("/cache", func(w http.ResponseWriter, r *http.Request) {
-		all := PreviewAllMCache()
-		SendJson(w, http.StatusOK, Payload{"message": all})
-	}).Methods(http.MethodGet)
-
 	// Object Serving
 	r.PathPrefix("/share").HandlerFunc(HandleServingRequestedObject).Methods(http.MethodGet)
 	r.PathPrefix("/").HandlerFunc(HandleServingDirectObject).Methods(http.MethodGet)
@@ -68,7 +63,7 @@ func main() {
 	// middlewares
 	r.Use(func(n http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("content-type", "application/json")
 			w.Header().Set("cache-control", "no-cache")
 			n.ServeHTTP(w, r)
 		})

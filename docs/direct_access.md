@@ -43,7 +43,9 @@ Url will be like the first example `s3://{bucket}/{resource}/{path/to/object}` v
 - Must be url encoded.
 - Must start with `s3://` and end with the object name *with extension*.
  
-## Policy [TO BE DONE]
+## Policy 
+*[TO BE DONE]*
+
 Represents a very simple contract to handle external requests to the required resource object. 
 We are using it instead of generating `ObjectSharingSession` for each object in the requested directory/resource.
 

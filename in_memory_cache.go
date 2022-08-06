@@ -8,8 +8,10 @@ import (
 	"golang.org/x/sync/syncmap"
 )
 
+type TTLCache map[string]time.Time
+
 var cache syncmap.Map
-var ttlCache map[string]time.Time
+var ttlCache TTLCache
 
 type CValue any
 type CKey []string
@@ -26,7 +28,7 @@ type CacheValue struct {
 
 func OpenInMemoryCache() {
 	cache = syncmap.Map{}
-	ttlCache = map[string]time.Time{}
+	ttlCache = TTLCache{}
 	go func() {
 		for now := range time.Tick(time.Second) {
 			if len(ttlCache) == 0 {
